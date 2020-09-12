@@ -1,0 +1,7 @@
+future
+torch
+torchviz
+scikit-learn
+pandas
+numpy
+cPickle
