@@ -283,10 +283,10 @@ class TBSM_Net(nn.Module):
 
             #  Set offsets; resize if needed.
             curr_max_offset = (j_upper - j_lower) * n
-            if curr_max_offset > self.max_offset:
+            if curr_max_offset > self.max_offset + 1:
                 #  Resize offsets to 2x required size.
                 self.offsets = torch.tensor(list(range(curr_max_offset * 2))).to(self.offsets.device)
-                self.max_offset = curr_max_offset
+                self.max_offset = curr_max_offset * 2
 
             concatenated_lS_o = [self.offsets[: curr_max_offset] for j in range(len(lS_o[0]))]
 
