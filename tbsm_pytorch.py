@@ -254,15 +254,15 @@ class TBSM_Net(nn.Module):
             f_mlp = np.array([self.num_mlps, self.num_mlps + 4, 1])
             self.final_mlp = dlrm.DLRM_Net().create_mlp(f_mlp, f_mlp.size - 2)
 
-        #  Offsets need to be stored beforehand if args.run_fast.
+        # Offsets need to be stored beforehand if args.run_fast.
         if args.run_fast:
-            #  Constant offsets tensor.
+            # Constant offsets tensor - resize if needed.
             self.max_offset = 10000000
             self.offsets = torch.tensor(list(range(self.max_offset)))
             self.offsets_moved = False
 
     def forward(self, x, lS_o, lS_i):
-        #  Move offsets to device if needed.
+        # Move offsets to device if needed and not already done.
         if args.run_fast and not self.offsets_moved:
             self.offsets = self.offsets.to(x[0].device)
             self.offsets_moved = True
@@ -272,42 +272,42 @@ class TBSM_Net(nn.Module):
         ts = len(x)
         H = torch.zeros(n, self.ts_length, self.ln_top[-1]).to(x[0].device)
 
-        #  Compute H using either fast or original approach depending on args.run_fast.
+        # Compute H using either fast or original approach depending on args.run_fast.
         if args.run_fast:
-            #  j determines access indices of input; first, determine j bounds and get all inputs.
+            # j determines access indices of input; first, determine j bounds and get all inputs.
             j_lower = (ts - self.ts_length - 1)
             j_upper = (ts - 1)
 
-            #  Concatenate x[j]s.
+            # Concatenate x[j]s using j bounds.
             concatenated_x = torch.cat(x[j_lower : j_upper])
 
-            #  Set offsets; resize if needed.
+            # Set offsets and increase size if needed.
             curr_max_offset = (j_upper - j_lower) * n
             if curr_max_offset > self.max_offset + 1:
-                #  Resize offsets to 2x required size.
+                # Resize offsets to 2x required size.
                 self.offsets = torch.tensor(list(range(curr_max_offset * 2))).to(self.offsets.device)
                 self.max_offset = curr_max_offset * 2
 
             concatenated_lS_o = [self.offsets[: curr_max_offset] for j in range(len(lS_o[0]))]
 
-            #  Concatenate lS_i[0, 1, 2]s.
+            # Concatenate lS_i[0, 1, 2]s.
             concatenated_lS_i = [torch.cat([lS_i[i][j] for i in range(j_lower, j_upper)]) for j in range(len(lS_i[0]))]
 
-            #  oj determines access indices of output; determine oj bounds to assign output values in H. oj is just j indices adjusted to start at 0.
+            # oj determines access indices of output; determine oj bounds to assign output values in H. oj is just j indices adjusted to start at 0.
             oj_lower = 0 - (ts - self.ts_length - 1)
             oj_upper = (ts - 1) - (ts - self.ts_length - 1)
 
-            #  After fetching all inputs, run through DLRM.
+            # After fetching all inputs, run through DLRM.
             concatenated_dlrm_output = self.dlrm(concatenated_x, concatenated_lS_o, concatenated_lS_i)
 
-            #  Reshape output with new ts dimension and transpose for H output.
+            # Reshape output with new TS dimension and transpose to get H output.
             transposed_concatenated_dlrm_output = torch.transpose(concatenated_dlrm_output.reshape((j_upper - j_lower), n, self.ln_top[-1]), 0, 1)
             if self.model_type == "tsl" and self.tsl_proj:
                 dlrm_output = Functional.normalize(transposed_concatenated_dlrm_output, p=2, dim=2)
             else:
                 dlrm_output = transposed_concatenated_dlrm_output
 
-            #  Assign the output to H with correct oj bounds.
+            # Assign the output to H with correct output bounds.
             H[:, oj_lower : oj_upper, :] = dlrm_output
 
         else:
